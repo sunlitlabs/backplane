@@ -1,8 +1,9 @@
 """Tray icon management (pystray-backed).
 
-Phase 0 scope: a single icon with a static menu. Phase 5 generalizes this
-into a TrayModel that rebuilds dynamically as plugins load/crash/restart and
-supports both one-icon-per-plugin and one-combined-icon display modes.
+``Tray`` owns one pystray.Icon; ``TrayModel`` (see tray_model.py) decides,
+from the exact same ``Tray`` class, whether that means one icon per plugin
+or one combined icon for everything -- proving solo-vs-combined is
+genuinely just a display-mode setting, not two different code paths.
 """
 
 from __future__ import annotations
@@ -30,6 +31,10 @@ def make_placeholder_icon_image(size: int = 64) -> Image.Image:
     return image
 
 
+def build_flat_menu(items: List[TrayItem]) -> pystray.Menu:
+    return pystray.Menu(*(pystray.MenuItem(item.label, _make_menu_callback(item.callback)) for item in items))
+
+
 class Tray:
     """Owns a single pystray.Icon running on its own daemon thread.
 
@@ -43,29 +48,14 @@ class Tray:
         self,
         name: str,
         title: str,
-        items: List[TrayItem],
+        menu: pystray.Menu,
         image: Optional[Image.Image] = None,
     ):
-        self._items = list(items)
-        self._icon = pystray.Icon(
-            name,
-            icon=image or make_placeholder_icon_image(),
-            title=title,
-            menu=self._build_menu(),
-        )
+        self._icon = pystray.Icon(name, icon=image or make_placeholder_icon_image(), title=title, menu=menu)
         self._thread: Optional[threading.Thread] = None
 
-    def _build_menu(self) -> pystray.Menu:
-        return pystray.Menu(
-            *(
-                pystray.MenuItem(item.label, _make_menu_callback(item.callback))
-                for item in self._items
-            )
-        )
-
-    def set_items(self, items: List[TrayItem]) -> None:
-        self._items = list(items)
-        self._icon.menu = self._build_menu()
+    def set_menu(self, menu: pystray.Menu) -> None:
+        self._icon.menu = menu
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._icon.run, name="backplane-tray", daemon=True)

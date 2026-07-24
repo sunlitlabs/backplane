@@ -30,10 +30,13 @@ RegisterHotKey-based hotkey manager with conflict detection), Phase 2
 (host/plugin subprocess split with named-pipe IPC), Phase 3 (centralized
 settings store with schema-defaults migration, generic schema-driven
 settings UI with conditional sections, and secrets via Credential Manager),
-and Phase 4 (toolkit-agnostic single-instance guard via a named mutex,
+Phase 4 (toolkit-agnostic single-instance guard via a named mutex,
 consistent taskbar identity across however many windows a plugin opens, and
-a close-behavior setting a plugin's own window-close code can consult) --
-all proven end-to-end with dummy test plugins over real IPC.
+a close-behavior setting a plugin's own window-close code can consult), and
+Phase 5 (TrayModel: one icon per plugin or one combined icon from the same
+registered plugin data, proving solo-vs-combined is genuinely just a
+display-mode setting) -- all proven end-to-end with dummy test plugins over
+real IPC.
 
 ## Commands
 

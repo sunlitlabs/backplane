@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from backplane.host.crash_log import setup_crash_logging, tk_report_callback_exception
-from backplane.host.tray import Tray, TrayItem
+from backplane.host.tray_model import PluginTrayInfo, TrayModel
 
 APP_NAME = "Backplane"
 PUBLISHER = "Sunlit Labs"
@@ -45,6 +45,7 @@ class HostProcess:
         self,
         log_path: Optional[Path] = None,
         auto_exit_after: Optional[float] = None,
+        tray_mode: str = "separate",
     ):
         self.logger: logging.Logger = setup_crash_logging(log_path or default_log_path())
         self.root = tk.Tk()
@@ -53,18 +54,18 @@ class HostProcess:
             self.logger
         )
 
-        self.tray = Tray(
-            name="backplane-host",
-            title=APP_NAME,
-            items=[TrayItem("Exit", self.shutdown)],
-        )
+        # TrayModel governs every registered plugin's tray presence (Phase 6's
+        # registry registers real plugins into it); Backplane registers
+        # itself as a baseline entry so there's always at least one icon
+        # (with an Exit item) even before any plugin is registered.
+        self.tray_model = TrayModel(mode=tray_mode, on_exit=self.shutdown)
+        self.tray_model.register_plugin(PluginTrayInfo(name="__host__", display_name=APP_NAME))
 
         self._auto_exit_after = auto_exit_after
         self._shutting_down = False
 
     def start(self) -> None:
         self.logger.info("Backplane host starting (pid=%s)", os.getpid())
-        self.tray.start()
         if self._auto_exit_after is not None:
             self.root.after(int(self._auto_exit_after * 1000), self.shutdown)
         try:
@@ -82,9 +83,9 @@ class HostProcess:
 
         self.logger.info("Backplane host shutting down")
         try:
-            self.tray.stop()
+            self.tray_model.stop()
         except Exception:
-            self.logger.exception("Error stopping tray icon during shutdown")
+            self.logger.exception("Error stopping tray icon(s) during shutdown")
 
         self.root.after(0, self.root.destroy)
 
@@ -99,9 +100,10 @@ def main(argv: Optional[list] = None) -> int:
         help="Auto-exit after N seconds. For smoke testing only.",
     )
     parser.add_argument("--log-path", type=Path, default=None)
+    parser.add_argument("--tray-mode", choices=("separate", "combined"), default="separate")
     args = parser.parse_args(argv)
 
-    host = HostProcess(log_path=args.log_path, auto_exit_after=args.self_test)
+    host = HostProcess(log_path=args.log_path, auto_exit_after=args.self_test, tray_mode=args.tray_mode)
     host.start()
     return 0
 
