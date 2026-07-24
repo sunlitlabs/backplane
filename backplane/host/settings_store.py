@@ -53,6 +53,13 @@ class SettingsStore:
         self.save(plugin_name, current)
         return current
 
+    def delete(self, plugin_name: str) -> None:
+        """Used by the canonical uninstall routine (registry.py)."""
+        try:
+            self._path_for(plugin_name).unlink()
+        except FileNotFoundError:
+            pass
+
     def _path_for(self, plugin_name: str) -> Path:
         return self.settings_dir / f"{plugin_name}.json"
 

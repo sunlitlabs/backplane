@@ -73,6 +73,21 @@ def test_in_process_conflict_reports_owner(manager: HotkeyManager):
     assert exc_info.value.owner == "first-plugin"
 
 
+def test_unregister_all_for_owner_only_affects_that_owner(manager: HotkeyManager):
+    manager.register("ctrl+alt+f18", owner="plugin-a", callback=lambda: None)
+    manager.register("ctrl+alt+f19", owner="plugin-a", callback=lambda: None)
+    manager.register("ctrl+alt+f20", owner="plugin-b", callback=lambda: None)
+
+    manager.unregister_all_for_owner("plugin-a")
+
+    remaining_owners = {reg.owner for reg in manager._registrations.values()}
+    assert remaining_owners == {"plugin-b"}
+
+    # And plugin-a's combos are actually free again, not just removed from
+    # our bookkeeping -- re-registering them must succeed.
+    manager.register("ctrl+alt+f18", owner="plugin-a-again", callback=lambda: None)
+
+
 def test_os_level_conflict_across_two_independent_managers():
     """The real point of using RegisterHotKey: two managers that share no
     Python-level state must still conflict, because Windows tracks a

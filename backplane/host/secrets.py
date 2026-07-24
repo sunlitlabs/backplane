@@ -43,9 +43,18 @@ class _CREDENTIALW(ctypes.Structure):
 
 
 _PCREDENTIALW = ctypes.POINTER(_CREDENTIALW)
+_PPCREDENTIALW = ctypes.POINTER(_PCREDENTIALW)
 
 advapi32.CredWriteW.argtypes = [_PCREDENTIALW, wintypes.DWORD]
 advapi32.CredWriteW.restype = wintypes.BOOL
+
+advapi32.CredEnumerateW.argtypes = [
+    wintypes.LPCWSTR,
+    wintypes.DWORD,
+    ctypes.POINTER(wintypes.DWORD),
+    ctypes.POINTER(_PPCREDENTIALW),
+]
+advapi32.CredEnumerateW.restype = wintypes.BOOL
 
 advapi32.CredReadW.argtypes = [
     wintypes.LPCWSTR,
@@ -122,3 +131,32 @@ def delete_secret(namespace: str, key: str) -> None:
         if error_code == ERROR_NOT_FOUND:
             return
         raise SecretError(f"CredDeleteW failed for {key!r} (Win32 error {error_code})")
+
+
+def delete_all_secrets(namespace: str) -> int:
+    """Delete every secret stored under this namespace, regardless of key
+    name. Used by the canonical uninstall routine (registry.py) -- a
+    plugin's secrets are never tracked centrally by key name, so a
+    complete uninstall has to enumerate rather than guess which keys it
+    might have set. Returns how many were deleted."""
+    filter_pattern = f"{_target_name(namespace, '*')}"
+    count = wintypes.DWORD(0)
+    creds_ptr = _PPCREDENTIALW()
+    ctypes.set_last_error(0)
+    if not advapi32.CredEnumerateW(filter_pattern, 0, ctypes.byref(count), ctypes.byref(creds_ptr)):
+        error_code = ctypes.get_last_error()
+        if error_code == ERROR_NOT_FOUND:
+            return 0
+        raise SecretError(f"CredEnumerateW failed for {namespace!r} (Win32 error {error_code})")
+    try:
+        targets = [creds_ptr[i].contents.TargetName for i in range(count.value)]
+    finally:
+        advapi32.CredFree(creds_ptr)
+
+    for target in targets:
+        ctypes.set_last_error(0)
+        if not advapi32.CredDeleteW(target, CRED_TYPE_GENERIC, 0):
+            error_code = ctypes.get_last_error()
+            if error_code != ERROR_NOT_FOUND:
+                raise SecretError(f"CredDeleteW failed for {target!r} (Win32 error {error_code})")
+    return len(targets)

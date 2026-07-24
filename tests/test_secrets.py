@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 
-from backplane.host.secrets import delete_secret, get_secret, set_secret
+from backplane.host.secrets import delete_all_secrets, delete_secret, get_secret, set_secret
 
 
 @pytest.fixture
@@ -49,6 +49,38 @@ def test_delete_removes_the_secret(namespace):
 
 def test_delete_of_nonexistent_secret_is_a_no_op(namespace):
     delete_secret(namespace, "missing")  # must not raise
+
+
+def test_delete_all_secrets_removes_every_key_in_the_namespace(namespace):
+    set_secret(namespace, "api_key", "value-1")
+    set_secret(namespace, "token", "value-2")
+
+    deleted_count = delete_all_secrets(namespace)
+
+    assert deleted_count == 2
+    assert get_secret(namespace, "api_key") is None
+    assert get_secret(namespace, "token") is None
+
+
+def test_delete_all_secrets_does_not_touch_other_namespaces():
+    ns_a = f"backplane-test-a-{uuid.uuid4().hex[:8]}"
+    ns_b = f"backplane-test-b-{uuid.uuid4().hex[:8]}"
+    try:
+        set_secret(ns_a, "api_key", "value-a")
+        set_secret(ns_b, "api_key", "value-b")
+
+        delete_all_secrets(ns_a)
+
+        assert get_secret(ns_a, "api_key") is None
+        assert get_secret(ns_b, "api_key") == "value-b"
+    finally:
+        delete_secret(ns_a, "api_key")
+        delete_secret(ns_b, "api_key")
+
+
+def test_delete_all_secrets_on_empty_namespace_is_a_no_op():
+    ns = f"backplane-test-empty-{uuid.uuid4().hex[:8]}"
+    assert delete_all_secrets(ns) == 0
 
 
 def test_different_namespaces_are_isolated():

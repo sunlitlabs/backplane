@@ -297,6 +297,15 @@ class HotkeyManager:
                 self._combo_to_id.pop(reg.combo, None)
         self._call_on_pump_thread("unregister", hotkey_id)
 
+    def unregister_all_for_owner(self, owner: str) -> None:
+        """Used by the canonical uninstall routine (registry.py) -- a
+        plugin being uninstalled must not leave any of its hotkeys
+        registered, freeing those combos for reuse immediately."""
+        with self._lock:
+            ids = [hid for hid, reg in self._registrations.items() if reg.owner == owner]
+        for hotkey_id in ids:
+            self.unregister(hotkey_id)
+
     # -- internals --------------------------------------------------------
 
     def _call_on_pump_thread(self, action: str, *args) -> tuple:
