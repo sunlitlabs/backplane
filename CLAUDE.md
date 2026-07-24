@@ -22,8 +22,27 @@ install/security behavior as neutral engineering requirements only.
 
 ## Status
 
-Design phase — no implementation yet. This file will grow a Commands
-section once there's a package/CLI to run.
+Implementation in progress. Building Backplane itself first (10 phases,
+tracked in the approved build plan); the three existing tools
+(py-sensor, CrierTTS, L10 Manager) get migrated onto it afterward, in that
+order. Phase 0 (host process skeleton: Tk root, tray icon, crash logging)
+is done.
+
+## Commands
+
+Run from this repo's root, using the local dev venv:
+
+```bash
+# One-time setup
+python -m venv .venv
+.venv/Scripts/pip install -e ".[dev]"
+
+# Run the host process (Phase 0: shows a tray icon with just Exit)
+.venv/Scripts/python -B -m backplane.host.process
+
+# Run the test suite
+.venv/Scripts/python -B -m pytest tests/ -v
+```
 
 ## Architecture (summary — see ARCHITECTURE.md for detail)
 
