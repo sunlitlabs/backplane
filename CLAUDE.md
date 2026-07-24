@@ -35,11 +35,17 @@ consistent taskbar identity across however many windows a plugin opens, and
 a close-behavior setting a plugin's own window-close code can consult), and
 Phase 5 (TrayModel: one icon per plugin or one combined icon from the same
 registered plugin data, proving solo-vs-combined is genuinely just a
-display-mode setting), and Phase 6 (plugin registry: install/uninstall as
+display-mode setting), Phase 6 (plugin registry: install/uninstall as
 the registration trigger, bounded-retry drift detection for a plugin whose
 files went missing, and the one canonical uninstall routine tearing down
-tray presence, hotkeys, settings, and secrets) -- all proven end-to-end
-with dummy test plugins over real IPC.
+tray presence, hotkeys, settings, and secrets), and Phase 7 (the updater:
+GitHub Releases + SemVer as the trigger, versioned-folder + directory-
+junction installs so updates never overwrite in place, rollback as just
+re-pointing the junction back, pruning old versions only once the current
+one has proven it starts, and the update-now/wait/skip + progress +
+restart-now/later dialog flow) -- all proven end-to-end with dummy test
+plugins over real IPC, and the junction/pruning mechanism against the real
+filesystem.
 
 ## Commands
 
