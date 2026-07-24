@@ -1,0 +1,6 @@
+{
+  "name": "settings-dummy-plugin",
+  "display_name": "Settings Dummy Plugin",
+  "version": "0.0.1",
+  "entrypoint": "settings_dummy_plugin.plugin:SettingsDummyPlugin"
+}

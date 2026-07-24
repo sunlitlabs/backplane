@@ -9,21 +9,55 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
+from backplane.host import secrets as secrets_module
 from backplane.host.ipc.server import IpcServer, make_pipe_address
+from backplane.host.settings_store import SettingsStore
 
 
 class PluginProcess:
-    """One running plugin subprocess and its IPC channel."""
+    """One running plugin subprocess and its IPC channel.
 
-    def __init__(self, plugin_name: str, plugin_dir: Path):
+    ``settings_store``/``settings_schema`` are optional so Phase 2's bare
+    dummy-plugin usage (no settings at all) keeps working unchanged; when
+    both are given, get_settings/set_settings/get_secret/set_secret
+    requests from the plugin are wired straight through to the host's
+    stores.
+    """
+
+    def __init__(
+        self,
+        plugin_name: str,
+        plugin_dir: Path,
+        settings_store: Optional[SettingsStore] = None,
+        settings_schema: Optional[Dict[str, Any]] = None,
+    ):
         self.plugin_name = plugin_name
         self.plugin_dir = plugin_dir
         self.ipc = IpcServer(make_pipe_address(plugin_name))
         self._popen: Optional[subprocess.Popen] = None
         self._ready = threading.Event()
         self.ipc.on("ready", lambda _payload: self._ready.set())
+
+        if settings_store is not None:
+            schema = settings_schema or {"fields": []}
+            self.ipc.on_request(
+                "get_settings", lambda _payload: settings_store.load(plugin_name, schema)
+            )
+            self.ipc.on_request(
+                "set_settings",
+                lambda payload: settings_store.merge_and_save(
+                    plugin_name, schema, payload.get("updates") or {}
+                ),
+            )
+            self.ipc.on_request(
+                "get_secret", lambda payload: secrets_module.get_secret(plugin_name, payload["key"])
+            )
+            self.ipc.on_request(
+                "set_secret",
+                lambda payload: secrets_module.set_secret(plugin_name, payload["key"], payload["value"]),
+            )
 
     def start(self, connect_timeout: float = 10.0, ready_timeout: float = 10.0) -> None:
         self._popen = subprocess.Popen(

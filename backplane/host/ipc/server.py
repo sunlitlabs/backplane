@@ -10,7 +10,7 @@ import logging
 import threading
 import uuid
 from multiprocessing.connection import Connection, Listener
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from backplane.host.ipc.protocol import decode_message, encode_message, make_message
 
@@ -37,6 +37,7 @@ class IpcServer:
         self._listener = Listener(address, family="AF_PIPE")
         self._conn: Optional[Connection] = None
         self._handlers: Dict[str, Callable[[dict], None]] = {}
+        self._request_handlers: Dict[str, Callable[[dict], Any]] = {}
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
@@ -45,7 +46,16 @@ class IpcServer:
         return self._address
 
     def on(self, message_type: str, handler: Callable[[dict], None]) -> None:
+        """Register a fire-and-forget handler (e.g. 'notify', 'ready') --
+        called for its side effect, no response is sent back."""
         self._handlers[message_type] = handler
+
+    def on_request(self, message_type: str, handler: Callable[[dict], Any]) -> None:
+        """Register a request/response handler (e.g. 'get_settings') --
+        the handler's return value is sent back as a 'response' message
+        correlated by id; a raised exception is sent back as an error
+        response instead of propagating here."""
+        self._request_handlers[message_type] = handler
 
     def accept(self, timeout: Optional[float] = None) -> None:
         """Block until the plugin subprocess connects, then start the
@@ -103,11 +113,27 @@ class IpcServer:
             except Exception:
                 logger.exception("Malformed IPC message from plugin, ignoring")
                 continue
-            handler = self._handlers.get(message.get("type"))
+
+            msg_type = message.get("type")
+
+            request_handler = self._request_handlers.get(msg_type)
+            if request_handler is not None:
+                try:
+                    result = request_handler(message.get("payload") or {})
+                    response_payload = {"ok": True, "result": result}
+                except Exception as exc:  # noqa: BLE001 -- turned into an error response, not raised
+                    logger.exception("Error handling IPC request type=%s", msg_type)
+                    response_payload = {"ok": False, "error": str(exc)}
+                self._conn.send_bytes(
+                    encode_message(make_message("response", response_payload, msg_id=message.get("id")))
+                )
+                continue
+
+            handler = self._handlers.get(msg_type)
             if handler:
                 try:
                     handler(message.get("payload") or {})
                 except Exception:
-                    logger.exception("Error handling IPC message type=%s", message.get("type"))
+                    logger.exception("Error handling IPC message type=%s", msg_type)
             else:
-                logger.warning("No handler for IPC message type=%s", message.get("type"))
+                logger.warning("No handler for IPC message type=%s", msg_type)

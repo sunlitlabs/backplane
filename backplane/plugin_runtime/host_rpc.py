@@ -7,13 +7,16 @@ grows; Phase 2 scope is just notify() plus receiving invoked callbacks.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 from multiprocessing.connection import Client, Connection
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from backplane.host.ipc.protocol import decode_message, encode_message, make_message
 
 logger = logging.getLogger("backplane.plugin")
+
+DEFAULT_REQUEST_TIMEOUT = 10.0
 
 
 class HostRPC:
@@ -31,6 +34,9 @@ class HostRPC:
         self._thread = threading.Thread(
             target=self._recv_loop, name="backplane-plugin-ipc", daemon=True
         )
+        self._pending: Dict[int, "queue.Queue"] = {}
+        self._pending_lock = threading.Lock()
+        self._next_request_id = 1
 
     def set_invoke_target(self, target: Any) -> None:
         self._invoke_target = target
@@ -47,6 +53,18 @@ class HostRPC:
         pipe connection existing is not sufficient evidence of that."""
         self._send("ready", {})
 
+    def get_settings(self) -> dict:
+        return self._call("get_settings", {})
+
+    def set_settings(self, updates: dict) -> dict:
+        return self._call("set_settings", {"updates": updates})
+
+    def get_secret(self, key: str) -> Optional[str]:
+        return self._call("get_secret", {"key": key})
+
+    def set_secret(self, key: str, value: str) -> None:
+        self._call("set_secret", {"key": key, "value": value})
+
     def close(self) -> None:
         self._stop.set()
         try:
@@ -56,6 +74,28 @@ class HostRPC:
 
     def _send(self, message_type: str, payload: dict) -> None:
         self._conn.send_bytes(encode_message(make_message(message_type, payload)))
+
+    def _call(self, message_type: str, payload: dict, timeout: float = DEFAULT_REQUEST_TIMEOUT) -> Any:
+        """Send a request and block for the host's correlated response.
+        Raises RuntimeError if the host reports an error, or queue.Empty's
+        parent (via .get(timeout=...)) if the host never responds."""
+        with self._pending_lock:
+            request_id = self._next_request_id
+            self._next_request_id += 1
+            result_q: "queue.Queue" = queue.Queue(maxsize=1)
+            self._pending[request_id] = result_q
+
+        self._conn.send_bytes(encode_message(make_message(message_type, payload, msg_id=request_id)))
+
+        try:
+            response = result_q.get(timeout=timeout)
+        finally:
+            with self._pending_lock:
+                self._pending.pop(request_id, None)
+
+        if not response.get("ok", False):
+            raise RuntimeError(response.get("error", f"Host returned an error for {message_type!r}"))
+        return response.get("result")
 
     def _recv_loop(self) -> None:
         while not self._stop.is_set():
@@ -68,7 +108,15 @@ class HostRPC:
             except Exception:
                 logger.exception("Malformed IPC message from host, ignoring")
                 continue
-            if message.get("type") == "invoke":
+
+            msg_type = message.get("type")
+            if msg_type == "response":
+                with self._pending_lock:
+                    result_q = self._pending.get(message.get("id"))
+                if result_q:
+                    result_q.put(message.get("payload") or {})
+                continue
+            if msg_type == "invoke":
                 self._handle_invoke(message.get("payload") or {})
 
     def _handle_invoke(self, payload: dict) -> None:
@@ -81,7 +129,18 @@ class HostRPC:
         if method is None:
             logger.warning("Plugin has no method %s", method_name)
             return
-        try:
-            method(*args)
-        except Exception:
-            logger.exception("Error running invoked method %s", method_name)
+
+        # Must not call method() on this thread: this IS the receive loop,
+        # and an invoked method (on_hotkey, a menu callback, ...) commonly
+        # turns around and makes its own blocking host call (get_settings,
+        # notify, ...) -- which can only ever be answered by this same loop
+        # reading the next incoming message. Calling synchronously here
+        # deadlocks the plugin against itself the first time that happens.
+        # Same reasoning as the host's own WM_HOTKEY dispatch in hotkeys.py.
+        def _run() -> None:
+            try:
+                method(*args)
+            except Exception:
+                logger.exception("Error running invoked method %s", method_name)
+
+        threading.Thread(target=_run, daemon=True).start()
