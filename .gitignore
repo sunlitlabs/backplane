@@ -1,0 +1,15 @@
+# Never publish private notes (environment-specific cautions, personal context)
+/private/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+vendor/
+
+# Editors/OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
