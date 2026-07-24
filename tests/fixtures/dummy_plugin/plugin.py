@@ -23,6 +23,10 @@ class DummyPlugin(PluginBase):
         # back over the same channel.
         self.host.notify("Hotkey fired", f"id={hotkey_id}")
 
+    def report_close_behavior(self) -> None:
+        behavior = self.host.get_close_behavior()
+        self.host.notify("close_behavior", behavior)
+
     def start(self) -> None:
         # Blocks so the subprocess stays alive to receive invoke messages;
         # the real contract is that start() owns the plugin's lifetime.

@@ -32,6 +32,7 @@ class PluginProcess:
         plugin_dir: Path,
         settings_store: Optional[SettingsStore] = None,
         settings_schema: Optional[Dict[str, Any]] = None,
+        close_behavior: str = "quit",
     ):
         self.plugin_name = plugin_name
         self.plugin_dir = plugin_dir
@@ -39,6 +40,12 @@ class PluginProcess:
         self._popen: Optional[subprocess.Popen] = None
         self._ready = threading.Event()
         self.ipc.on("ready", lambda _payload: self._ready.set())
+
+        # Static for now -- resolving this from settings_default + a
+        # per-install override in the settings store is the registry's job
+        # (Phase 6), which is what will actually construct PluginProcess
+        # instances for real plugins. This provides the mechanism.
+        self.ipc.on_request("get_close_behavior", lambda _payload: close_behavior)
 
         if settings_store is not None:
             schema = settings_schema or {"fields": []}

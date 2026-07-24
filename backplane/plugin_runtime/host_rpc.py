@@ -65,6 +65,13 @@ class HostRPC:
     def set_secret(self, key: str, value: str) -> None:
         self._call("set_secret", {"key": key, "value": value})
 
+    def get_close_behavior(self) -> str:
+        """'quit' or 'minimize_to_tray'. A plugin with more than one
+        window decides for itself which of its windows this applies to
+        (typically its main window) -- Backplane doesn't touch plugin
+        windows directly, it only owns the setting."""
+        return self._call("get_close_behavior", {})
+
     def close(self) -> None:
         self._stop.set()
         try:
