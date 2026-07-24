@@ -25,8 +25,10 @@ install/security behavior as neutral engineering requirements only.
 Implementation in progress. Building Backplane itself first (10 phases,
 tracked in the approved build plan); the three existing tools
 (py-sensor, CrierTTS, L10 Manager) get migrated onto it afterward, in that
-order. Done so far: Phase 0 (host process skeleton) and Phase 1 (raw
-RegisterHotKey-based hotkey manager with conflict detection).
+order. Done so far: Phase 0 (host process skeleton), Phase 1 (raw
+RegisterHotKey-based hotkey manager with conflict detection), and Phase 2
+(host/plugin subprocess split with named-pipe IPC, proven end-to-end with a
+dummy test plugin).
 
 ## Commands
 

@@ -1,0 +1,32 @@
+"""A minimal PluginBase implementation used only to exercise Phase 2's
+host<->plugin subprocess IPC round trip. Not a real product plugin.
+"""
+
+from __future__ import annotations
+
+import threading
+
+from backplane.contracts import PluginBase
+
+
+class DummyPlugin(PluginBase):
+    def __init__(self) -> None:
+        self.host = None
+        self._stop_event = threading.Event()
+
+    def on_load(self, host) -> None:
+        self.host = host
+
+    def on_hotkey(self, hotkey_id: str) -> None:
+        # Proves both IPC directions in one round trip: the host invoked
+        # this method over IPC, and calling notify() here sends a message
+        # back over the same channel.
+        self.host.notify("Hotkey fired", f"id={hotkey_id}")
+
+    def start(self) -> None:
+        # Blocks so the subprocess stays alive to receive invoke messages;
+        # the real contract is that start() owns the plugin's lifetime.
+        self._stop_event.wait()
+
+    def stop(self) -> None:
+        self._stop_event.set()

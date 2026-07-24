@@ -1,0 +1,6 @@
+{
+  "name": "dummy-plugin",
+  "display_name": "Dummy Plugin",
+  "version": "0.0.1",
+  "entrypoint": "dummy_plugin.plugin:DummyPlugin"
+}
