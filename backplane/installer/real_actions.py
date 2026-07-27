@@ -31,6 +31,31 @@ from backplane.installer.shell_integration import (
 BACKPLANE_REPO = "sunlitlabs/backplane"
 
 
+def _locate_plugin_package_dir(version_dir: Path) -> Path:
+    """A plugin's release files are expected to be rooted at a package-named
+    subdirectory (e.g. "py_sensor/plugin.json", "py_sensor/__init__.py") --
+    the same convention Backplane uses for its own self-update, where
+    ``_restart_host`` points PYTHONPATH at ``current`` and imports
+    "backplane" as the package living directly inside it. This matters
+    because run_plugin() resolves a plugin's dotted entrypoint by adding
+    its *parent* directory to sys.path, which only works if the plugin's
+    own directory is named after the importable package -- never true for
+    ``version_dir`` itself, since that's named after the SemVer version
+    (e.g. "1.0.0", not a valid Python identifier).
+
+    Falls back to ``version_dir`` itself for a plugin.json placed directly
+    at the top (a flat, single-module plugin with no subpackage)."""
+    if (version_dir / "plugin.json").exists():
+        return version_dir
+    candidates = [d for d in version_dir.iterdir() if d.is_dir() and (d / "plugin.json").exists()]
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Expected exactly one package directory containing plugin.json under "
+            f"{version_dir}, found {len(candidates)}"
+        )
+    return candidates[0]
+
+
 def install_component(repo: str, install_root: Path) -> str:
     """Fetches the latest release of ``repo`` and installs it under
     ``install_root`` (a versions/ + current layout, per updater.py).
@@ -75,7 +100,8 @@ def build_real_actions(backplane_root: Path = None) -> LauncherActions:
     def install_plugin(name: str, repo: str) -> None:
         plugin_root = backplane_root / "plugins" / name
         version = install_component(repo, plugin_root)
-        install_dir = plugin_root / "versions" / version
+        version_dir = plugin_root / "versions" / version
+        install_dir = _locate_plugin_package_dir(version_dir)
         manifest = json.loads((install_dir / "plugin.json").read_text(encoding="utf-8"))
         registry.register(name, install_dir, manifest)
 
