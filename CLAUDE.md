@@ -58,10 +58,21 @@ instead of each file's own — running the *whole* suite together crossed
 the same Tcl multi-interpreter fragility that module-scoping had already
 fixed at the single-file level.
 
-**Not yet done** (tracked, not urgent): Start Menu shortcut + startup
-registration aren't wired into install/uninstall yet, and no real GitHub
-Release has been cut for `sunlitlabs/backplane` yet (so `bootstrap_
-backplane()` is untested against the live repo, only against fakes).
+Start Menu shortcuts and startup registration are now wired into install/
+uninstall too: `install_plugin` creates a shortcut (pointing at the same
+`launch_cli` smart-launcher entrypoint) when a plugin's manifest asks for
+one; `uninstall_plugin` removes it via the same path-computing function,
+so the two can't drift apart; `bootstrap_backplane` registers the host's
+own one-time HKCU Run key entry. Per-plugin "run on startup" is a
+different question from a Windows Run key now that there's one always-on
+host -- it just controls whether `HostProcess` auto-starts that plugin's
+supervisor when the host comes up (already wired in the integration pass
+above), not a separate per-plugin registry key.
+
+**Not yet done** (tracked, not urgent): no real GitHub Release has been
+cut for `sunlitlabs/backplane` yet, so `bootstrap_backplane()`/the
+smart-launcher's truly-fresh-machine path are untested against the live
+repo, only against fakes.
 
 **Next**: Part 2 of the plan — migrate py-sensor, then CrierTTS, then
 L10 Manager onto this, in that order (see the plan file referenced in

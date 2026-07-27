@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from backplane.host.process import default_data_dir
+from backplane.host.process import APP_NAME, default_data_dir
 from backplane.host.registry import PluginRegistry
 from backplane.host.updater import (
     VersionedInstall,
@@ -21,6 +21,12 @@ from backplane.host.updater import (
     fetch_release_files,
 )
 from backplane.installer.bootstrap import LauncherActions
+from backplane.installer.shell_integration import (
+    create_shortcut,
+    pythonw_executable,
+    set_run_on_startup,
+    start_menu_shortcut_path,
+)
 
 BACKPLANE_REPO = "sunlitlabs/backplane"
 
@@ -53,6 +59,15 @@ def build_real_actions(backplane_root: Path = None) -> LauncherActions:
 
     def bootstrap_backplane() -> None:
         install_component(BACKPLANE_REPO, backplane_root)
+        # The host itself needs exactly one startup registration, made
+        # once here (bootstrap only ever runs when Backplane isn't already
+        # installed) -- not a per-plugin concern. Per-plugin
+        # run_on_startup_default instead controls whether HostProcess
+        # auto-starts that plugin's own supervisor once the host is up
+        # (see process.py), since with one always-running host, "does this
+        # plugin start automatically" and "does a Windows Run key exist"
+        # are different questions.
+        set_run_on_startup(APP_NAME, f'"{pythonw_executable()}" -B -m backplane.host.process', enabled=True)
 
     def is_plugin_registered(name: str) -> bool:
         return registry.is_registered(name)
@@ -63,6 +78,15 @@ def build_real_actions(backplane_root: Path = None) -> LauncherActions:
         install_dir = plugin_root / "versions" / version
         manifest = json.loads((install_dir / "plugin.json").read_text(encoding="utf-8"))
         registry.register(name, install_dir, manifest)
+
+        if manifest.get("create_start_menu_entry_default", True):
+            display_name = manifest.get("display_name", name)
+            create_shortcut(
+                start_menu_shortcut_path(display_name),
+                pythonw_executable(),
+                arguments=f"-B -m backplane.installer.launch_cli {name} {repo}",
+                icon_location=str(install_dir / manifest["icon"]) if manifest.get("icon") else "",
+            )
 
     def launch_host() -> None:
         # DETACHED_PROCESS + CREATE_NO_WINDOW: the host must outlive this

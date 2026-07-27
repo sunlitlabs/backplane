@@ -158,8 +158,7 @@ def _plugin_files_present(entry: RegistryEntry) -> bool:
 @dataclass
 class UninstallContext:
     """Everything the canonical uninstall routine might need to tear
-    down. Optional pieces not built yet (Start Menu entry, startup
-    registration -- Phase 8) get added here as they land, without changing
+    down. Optional fields so this stays extensible without changing
     uninstall_plugin's shape or call sites."""
 
     tray_model: Optional[TrayModel] = None
@@ -167,6 +166,7 @@ class UninstallContext:
     settings_store: Optional[SettingsStore] = None
     purge_settings: bool = True
     purge_secrets: bool = True
+    remove_shell_integration: bool = True
 
 
 def uninstall_plugin(registry: PluginRegistry, plugin_name: str, ctx: UninstallContext) -> None:
@@ -175,6 +175,16 @@ def uninstall_plugin(registry: PluginRegistry, plugin_name: str, ctx: UninstallC
     removed out-of-band (after drift confirmation via
     ``PluginRegistry.check_drift``). Always runs every step it knows
     about; never a partial subset."""
+    if ctx.remove_shell_integration:
+        entry = registry.get(plugin_name)
+        if entry is not None:
+            # Local import: shell_integration lives in installer/, which
+            # importing at module level here would create a host -> installer
+            # dependency the rest of this package deliberately avoids.
+            from backplane.installer.shell_integration import remove_shortcut, start_menu_shortcut_path
+
+            display_name = entry.manifest.get("display_name", plugin_name)
+            remove_shortcut(start_menu_shortcut_path(display_name))
     if ctx.tray_model is not None:
         ctx.tray_model.unregister_plugin(plugin_name)
     if ctx.hotkey_manager is not None:

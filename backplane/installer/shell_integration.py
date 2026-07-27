@@ -10,6 +10,7 @@ pywin32 dependency needed for a single registry value write/delete.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import winreg
@@ -20,6 +21,24 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 _CREATE_SHORTCUT_SCRIPT = _SCRIPTS_DIR / "CreateShortcut.ps1"
 
 _RUN_KEY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+PUBLISHER = "Sunlit Labs"
+
+
+def start_menu_shortcut_path(display_name: str) -> Path:
+    """The one place this path is computed -- used by both installing
+    (create) and uninstalling (remove) a plugin's shortcut, so they can
+    never drift apart from each other."""
+    programs_dir = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+    return programs_dir / PUBLISHER / f"{display_name}.lnk"
+
+
+def pythonw_executable() -> str:
+    """Prefers pythonw.exe over python.exe for a background tray app --
+    avoids flashing a console window on launch. Falls back to
+    sys.executable itself if no windowed variant sits next to it."""
+    candidate = Path(sys.executable).with_name("pythonw.exe")
+    return str(candidate) if candidate.exists() else sys.executable
 
 
 class ShellIntegrationError(Exception):

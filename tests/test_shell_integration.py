@@ -7,14 +7,19 @@ with (or accidentally remove) a real startup entry on this machine.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import uuid
+from pathlib import Path
 
 from backplane.installer.shell_integration import (
     create_shortcut,
     is_registered_for_startup,
+    pythonw_executable,
     remove_shortcut,
     set_run_on_startup,
+    start_menu_shortcut_path,
 )
 
 
@@ -90,3 +95,30 @@ def test_disabling_a_never_registered_entry_is_a_no_op():
     name = f"BackplaneTest-{uuid.uuid4().hex[:8]}"
     set_run_on_startup(name, command="", enabled=False)  # must not raise
     assert not is_registered_for_startup(name)
+
+
+def test_start_menu_shortcut_path_is_stable_for_install_and_uninstall():
+    path_a = start_menu_shortcut_path("My Plugin")
+    path_b = start_menu_shortcut_path("My Plugin")
+    assert path_a == path_b
+    assert path_a.name == "My Plugin.lnk"
+    assert "Sunlit Labs" in path_a.parts
+    assert str(Path(os.environ["APPDATA"])) in str(path_a)
+
+
+def test_pythonw_executable_prefers_windowed_variant_when_present(tmp_path, monkeypatch):
+    fake_python = tmp_path / "python.exe"
+    fake_pythonw = tmp_path / "pythonw.exe"
+    fake_python.write_text("")
+    fake_pythonw.write_text("")
+    monkeypatch.setattr(sys, "executable", str(fake_python))
+
+    assert pythonw_executable() == str(fake_pythonw)
+
+
+def test_pythonw_executable_falls_back_when_no_windowed_variant(tmp_path, monkeypatch):
+    fake_python = tmp_path / "python.exe"
+    fake_python.write_text("")
+    monkeypatch.setattr(sys, "executable", str(fake_python))
+
+    assert pythonw_executable() == str(fake_python)

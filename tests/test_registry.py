@@ -150,3 +150,26 @@ def test_uninstall_plugin_tears_down_every_subsystem(tmp_path):
     finally:
         tray_model.stop()
         hotkeys.stop()
+
+
+def test_uninstall_plugin_removes_its_start_menu_shortcut(tmp_path, monkeypatch):
+    """Verifies the wiring (the right shortcut path gets targeted for
+    removal) via a real, throwaway shortcut file rather than touching this
+    machine's actual Start Menu -- start_menu_shortcut_path is
+    monkeypatched to point at a temp location instead."""
+    import backplane.installer.shell_integration as shell_integration
+
+    plugin_name = f"uninstall-test-{uuid.uuid4().hex[:8]}"
+    shortcut_path = tmp_path / "Start Menu" / f"{plugin_name}.lnk"
+    shortcut_path.parent.mkdir(parents=True)
+    shortcut_path.write_text("not a real .lnk, just needs to exist")
+
+    monkeypatch.setattr(shell_integration, "start_menu_shortcut_path", lambda display_name: shortcut_path)
+
+    registry = PluginRegistry(tmp_path / "registry.json")
+    plugin_dir = _make_plugin_dir(tmp_path, plugin_name)
+    registry.register(plugin_name, plugin_dir, {"name": plugin_name, "display_name": plugin_name})
+
+    assert shortcut_path.exists()
+    uninstall_plugin(registry, plugin_name, UninstallContext())
+    assert not shortcut_path.exists()
