@@ -43,9 +43,17 @@ GitHub Releases + SemVer as the trigger, versioned-folder + directory-
 junction installs so updates never overwrite in place, rollback as just
 re-pointing the junction back, pruning old versions only once the current
 one has proven it starts, and the update-now/wait/skip + progress +
-restart-now/later dialog flow) -- all proven end-to-end with dummy test
-plugins over real IPC, and the junction/pruning mechanism against the real
-filesystem.
+restart-now/later dialog flow), and Phase 8 (the smart-launcher: a fixed
+control pipe so a separate process can find an already-running host, the
+idempotent launch decision chain -- ping host, bootstrap Backplane if
+missing, register the plugin if missing, launch and wait for the host --
+Start Menu shortcut + startup-registration helpers, and the PowerShell
+layer: ported PythonCheck.ps1/CreateShortcut.ps1/StopRunningInstance.ps1,
+a stdlib-only bootstrap_standalone.py for the truly-fresh-machine case,
+and the one-file plugin launcher stub template) -- all proven end-to-end
+with dummy test plugins over real IPC, the junction/pruning mechanism and
+shell integration against the real filesystem/registry, and the PowerShell
+helpers verified for real (not just written).
 
 ## Commands
 
@@ -56,8 +64,15 @@ Run from this repo's root, using the local dev venv:
 python -m venv .venv
 .venv/Scripts/pip install -e ".[dev]"
 
-# Run the host process (Phase 0: shows a tray icon with just Exit)
+# Run the host process (shows a tray icon)
 .venv/Scripts/python -B -m backplane.host.process
+
+# Smart-launcher chain for a plugin (bootstraps Backplane/registers the
+# plugin/launches the host as needed, then asks it to show the plugin)
+.venv/Scripts/python -B -m backplane.installer.launch_cli <plugin-name> <owner/repo>
+
+# Regenerate the release manifest (before cutting a release)
+.venv/Scripts/python -B -m backplane.installer.generate_manifest
 
 # Run the test suite
 .venv/Scripts/python -B -m pytest tests/ -v
