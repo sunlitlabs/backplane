@@ -65,6 +65,14 @@ class HostRPC:
     def set_secret(self, key: str, value: str) -> None:
         self._call("set_secret", {"key": key, "value": value})
 
+    def register_hotkey(self, hotkey_id: str, combo: str) -> None:
+        """Registers ``combo`` for this plugin. The host keeps the
+        registration alive across a subprocess restart -- the plugin
+        never needs to re-register after a crash/relaunch; the host just
+        resumes routing on_hotkey(hotkey_id) to whichever connection is
+        currently live."""
+        self._call("register_hotkey", {"hotkey_id": hotkey_id, "combo": combo})
+
     def get_close_behavior(self) -> str:
         """'quit' or 'minimize_to_tray'. A plugin with more than one
         window decides for itself which of its windows this applies to

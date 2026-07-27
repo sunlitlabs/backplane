@@ -27,6 +27,10 @@ class DummyPlugin(PluginBase):
         behavior = self.host.get_close_behavior()
         self.host.notify("close_behavior", behavior)
 
+    def register_test_hotkey(self, hotkey_id: str, combo: str) -> None:
+        self.host.register_hotkey(hotkey_id, combo)
+        self.host.notify("hotkey_registered", hotkey_id)
+
     def start(self) -> None:
         # Blocks so the subprocess stays alive to receive invoke messages;
         # the real contract is that start() owns the plugin's lifetime.

@@ -22,38 +22,32 @@ install/security behavior as neutral engineering requirements only.
 
 ## Status
 
-Implementation in progress. Building Backplane itself first (10 phases,
-tracked in the approved build plan); the three existing tools
-(py-sensor, CrierTTS, L10 Manager) get migrated onto it afterward, in that
-order. Done so far: Phase 0 (host process skeleton), Phase 1 (raw
-RegisterHotKey-based hotkey manager with conflict detection), Phase 2
-(host/plugin subprocess split with named-pipe IPC), Phase 3 (centralized
-settings store with schema-defaults migration, generic schema-driven
-settings UI with conditional sections, and secrets via Credential Manager),
-Phase 4 (toolkit-agnostic single-instance guard via a named mutex,
-consistent taskbar identity across however many windows a plugin opens, and
-a close-behavior setting a plugin's own window-close code can consult), and
-Phase 5 (TrayModel: one icon per plugin or one combined icon from the same
-registered plugin data, proving solo-vs-combined is genuinely just a
-display-mode setting), Phase 6 (plugin registry: install/uninstall as
-the registration trigger, bounded-retry drift detection for a plugin whose
-files went missing, and the one canonical uninstall routine tearing down
-tray presence, hotkeys, settings, and secrets), and Phase 7 (the updater:
-GitHub Releases + SemVer as the trigger, versioned-folder + directory-
-junction installs so updates never overwrite in place, rollback as just
-re-pointing the junction back, pruning old versions only once the current
-one has proven it starts, and the update-now/wait/skip + progress +
-restart-now/later dialog flow), and Phase 8 (the smart-launcher: a fixed
-control pipe so a separate process can find an already-running host, the
-idempotent launch decision chain -- ping host, bootstrap Backplane if
-missing, register the plugin if missing, launch and wait for the host --
-Start Menu shortcut + startup-registration helpers, and the PowerShell
-layer: ported PythonCheck.ps1/CreateShortcut.ps1/StopRunningInstance.ps1,
-a stdlib-only bootstrap_standalone.py for the truly-fresh-machine case,
-and the one-file plugin launcher stub template) -- all proven end-to-end
-with dummy test plugins over real IPC, the junction/pruning mechanism and
-shell integration against the real filesystem/registry, and the PowerShell
-helpers verified for real (not just written).
+**Backplane's core build (Part 1 of the approved plan) is complete** —
+all 10 phases (0 through 9), 118 tests, all real (real Win32 hotkeys/
+Credential Manager/junctions/mutexes/registry, real subprocess IPC, real
+PowerShell verified via the tool, not mocked). Phase-by-phase detail is in
+git history (`git log --oneline`, tags `v0.1.0`..`v1.0.0`) rather than
+duplicated here.
+
+What exists end-to-end: a host process that manages plugin subprocesses
+over named-pipe IPC; hotkeys (raw `RegisterHotKey`, in-process + OS-level
+conflict detection, a live-capture Tk widget); centralized settings
+(schema-driven UI, conditional sections) and secrets (Credential Manager);
+a tray model where solo-vs-combined is just a display setting; a plugin
+registry with bounded-retry drift detection and one canonical uninstall
+routine; an updater (GitHub Releases + SemVer, versioned-folder +
+junction installs, rollback, pruning); a smart-launcher chain (fixed
+control pipe, idempotent bootstrap-or-launch, PowerShell prerequisite
+bootstrap) that's simultaneously a plugin's installer and its permanent
+run icon; and a crash/restart supervisor that preserves a plugin's
+hotkey/tray registrations across a crash without ever re-registering them
+from scratch (verified by test, including the case that would silently
+break: the callback closing over a live attribute, not a frozen
+connection).
+
+**Next**: Part 2 of the plan — migrate py-sensor, then CrierTTS, then
+L10 Manager onto this, in that order (see the plan file referenced in
+memory, or ARCHITECTURE.md's migration notes).
 
 ## Commands
 
@@ -98,6 +92,12 @@ python -m venv .venv
   is confirmed stable.
 - **"Solo" vs. "combined" tray icon** is a hosting-mode setting on the one
   host process, not a separate install or product.
+- **Crash/restart**: a dying plugin subprocess gets restarted (capped
+  attempts within a rolling window; past the cap, the host gives up rather
+  than respawning forever). Its hotkey/tray registrations are never
+  unregistered and re-registered — the registered callback looks up the
+  live IPC connection at dispatch time, so it just starts reaching the new
+  subprocess the moment it reconnects.
 
 ## Key Design Rules
 

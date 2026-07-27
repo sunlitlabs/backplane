@@ -88,6 +88,15 @@ def test_unregister_all_for_owner_only_affects_that_owner(manager: HotkeyManager
     manager.register("ctrl+alt+f18", owner="plugin-a-again", callback=lambda: None)
 
 
+def test_get_owner_of_reports_the_registered_owner(manager: HotkeyManager):
+    manager.register("ctrl+alt+f21", owner="plugin-a", callback=lambda: None)
+    assert manager.get_owner_of("ctrl+alt+f21") == "plugin-a"
+
+
+def test_get_owner_of_returns_none_for_a_free_combo(manager: HotkeyManager):
+    assert manager.get_owner_of("ctrl+alt+f22") is None
+
+
 def test_os_level_conflict_across_two_independent_managers():
     """The real point of using RegisterHotKey: two managers that share no
     Python-level state must still conflict, because Windows tracks a

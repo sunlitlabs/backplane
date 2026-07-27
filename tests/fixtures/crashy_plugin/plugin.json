@@ -1,0 +1,6 @@
+{
+  "name": "crashy-plugin",
+  "display_name": "Crashy Plugin",
+  "version": "0.0.1",
+  "entrypoint": "crashy_plugin.plugin:CrashyPlugin"
+}

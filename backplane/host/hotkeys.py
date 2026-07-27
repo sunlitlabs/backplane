@@ -306,6 +306,20 @@ class HotkeyManager:
         for hotkey_id in ids:
             self.unregister(hotkey_id)
 
+    def get_owner_of(self, combo: str) -> Optional[str]:
+        """Used for live conflict feedback in a settings/capture UI --
+        checking without attempting a real registration. Returns None if
+        the combo is free (as far as in-process bookkeeping knows; an
+        OS-level conflict with another application is only ever caught by
+        actually registering)."""
+        normalized = normalize_combo(combo)
+        with self._lock:
+            hotkey_id = self._combo_to_id.get(normalized)
+            if hotkey_id is None:
+                return None
+            reg = self._registrations.get(hotkey_id)
+            return reg.owner if reg else None
+
     # -- internals --------------------------------------------------------
 
     def _call_on_pump_thread(self, action: str, *args) -> tuple:

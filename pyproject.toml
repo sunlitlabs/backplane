@@ -1,6 +1,6 @@
 [project]
 name = "backplane"
-version = "0.9.0"
+version = "1.0.0"
 description = "Shared host runtime for small Windows tray utilities"
 requires-python = ">=3.10"
 dependencies = [

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from backplane.host import secrets as secrets_module
+from backplane.host.hotkeys import HotkeyManager
 from backplane.host.ipc.server import IpcServer, make_pipe_address
 from backplane.host.settings_store import SettingsStore
 
@@ -33,6 +34,7 @@ class PluginProcess:
         settings_store: Optional[SettingsStore] = None,
         settings_schema: Optional[Dict[str, Any]] = None,
         close_behavior: str = "quit",
+        hotkey_manager: Optional[HotkeyManager] = None,
     ):
         self.plugin_name = plugin_name
         self.plugin_dir = plugin_dir
@@ -46,6 +48,9 @@ class PluginProcess:
         # (Phase 6), which is what will actually construct PluginProcess
         # instances for real plugins. This provides the mechanism.
         self.ipc.on_request("get_close_behavior", lambda _payload: close_behavior)
+
+        if hotkey_manager is not None:
+            self.ipc.on_request("register_hotkey", self._make_register_hotkey_handler(hotkey_manager))
 
         if settings_store is not None:
             schema = settings_schema or {"fields": []}
@@ -66,7 +71,25 @@ class PluginProcess:
                 lambda payload: secrets_module.set_secret(plugin_name, payload["key"], payload["value"]),
             )
 
+    def _make_register_hotkey_handler(self, hotkey_manager: HotkeyManager):
+        # Reads self.ipc at *dispatch* time (a live attribute lookup), not
+        # a value frozen when the hotkey was registered -- so a restarted
+        # subprocess (a fresh accept() on the same PluginProcess, per
+        # PluginSupervisor) is reached automatically the moment it
+        # reconnects, with no unregister/re-register step at all.
+        def _handler(payload: dict) -> None:
+            hotkey_id = payload["hotkey_id"]
+            combo = payload["combo"]
+            hotkey_manager.register(
+                combo,
+                owner=self.plugin_name,
+                callback=lambda: self.ipc.send("invoke", {"method": "on_hotkey", "args": [hotkey_id]}),
+            )
+
+        return _handler
+
     def start(self, connect_timeout: float = 10.0, ready_timeout: float = 10.0) -> None:
+        self._ready.clear()  # a restart must wait for a *fresh* ready signal, not a stale one
         self._popen = subprocess.Popen(
             [
                 sys.executable,
