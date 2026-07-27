@@ -65,6 +65,15 @@ class HostRPC:
     def set_secret(self, key: str, value: str) -> None:
         self._call("set_secret", {"key": key, "value": value})
 
+    def add_tray_item(self, item_id: str, label: str) -> None:
+        """Adds a menu item to this plugin's tray presence (its own icon
+        in solo mode, or its submenu in combined mode -- TrayModel decides
+        which, this call doesn't need to know or care). Clicking it
+        invokes on_tray_item(item_id) back on this plugin, the same
+        live-connection pattern as register_hotkey: it keeps working
+        across a crash/restart with no re-registration needed."""
+        self._call("add_tray_item", {"item_id": item_id, "label": label})
+
     def register_hotkey(self, hotkey_id: str, combo: str) -> None:
         """Registers ``combo`` for this plugin. The host keeps the
         registration alive across a subprocess restart -- the plugin

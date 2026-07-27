@@ -31,6 +31,13 @@ class DummyPlugin(PluginBase):
         self.host.register_hotkey(hotkey_id, combo)
         self.host.notify("hotkey_registered", hotkey_id)
 
+    def on_tray_item(self, item_id: str) -> None:
+        self.host.notify("Tray item clicked", f"id={item_id}")
+
+    def add_test_tray_item(self, item_id: str, label: str) -> None:
+        self.host.add_tray_item(item_id, label)
+        self.host.notify("tray_item_added", item_id)
+
     def start(self) -> None:
         # Blocks so the subprocess stays alive to receive invoke messages;
         # the real contract is that start() owns the plugin's lifetime.

@@ -9,12 +9,14 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from backplane.host import secrets as secrets_module
 from backplane.host.hotkeys import HotkeyManager
 from backplane.host.ipc.server import IpcServer, make_pipe_address
 from backplane.host.settings_store import SettingsStore
+from backplane.host.tray import TrayItem
+from backplane.host.tray_model import PluginTrayInfo, TrayModel
 
 
 class PluginProcess:
@@ -35,6 +37,9 @@ class PluginProcess:
         settings_schema: Optional[Dict[str, Any]] = None,
         close_behavior: str = "quit",
         hotkey_manager: Optional[HotkeyManager] = None,
+        tray_model: Optional[TrayModel] = None,
+        display_name: Optional[str] = None,
+        open_settings_callback: Optional[Callable[[str], None]] = None,
     ):
         self.plugin_name = plugin_name
         self.plugin_dir = plugin_dir
@@ -42,6 +47,14 @@ class PluginProcess:
         self._popen: Optional[subprocess.Popen] = None
         self._ready = threading.Event()
         self.ipc.on("ready", lambda _payload: self._ready.set())
+
+        self._tray_model = tray_model
+        self._display_name = display_name or plugin_name
+        self._tray_items: List[TrayItem] = []
+        if open_settings_callback is not None:
+            self._tray_items.append(
+                TrayItem("Settings...", lambda: open_settings_callback(self.plugin_name))
+            )
 
         # Static for now -- resolving this from settings_default + a
         # per-install override in the settings store is the registry's job
@@ -51,6 +64,8 @@ class PluginProcess:
 
         if hotkey_manager is not None:
             self.ipc.on_request("register_hotkey", self._make_register_hotkey_handler(hotkey_manager))
+
+        self.ipc.on_request("add_tray_item", self._handle_add_tray_item)
 
         if settings_store is not None:
             schema = settings_schema or {"fields": []}
@@ -88,8 +103,23 @@ class PluginProcess:
 
         return _handler
 
+    def _handle_add_tray_item(self, payload: dict) -> None:
+        item_id = payload["item_id"]
+        label = payload["label"]
+        self._tray_items.append(
+            TrayItem(label, lambda: self.ipc.send("invoke", {"method": "on_tray_item", "args": [item_id]}))
+        )
+        if self._tray_model is not None:
+            self._tray_model.update_plugin_menu(self.plugin_name, self._tray_items)
+
     def start(self, connect_timeout: float = 10.0, ready_timeout: float = 10.0) -> None:
         self._ready.clear()  # a restart must wait for a *fresh* ready signal, not a stale one
+
+        if self._tray_model is not None and self._tray_model.get_tray(self.plugin_name) is None:
+            self._tray_model.register_plugin(
+                PluginTrayInfo(self.plugin_name, self._display_name, menu_items=list(self._tray_items))
+            )
+
         self._popen = subprocess.Popen(
             [
                 sys.executable,
@@ -123,3 +153,5 @@ class PluginProcess:
                 self._popen.wait(timeout=timeout)
             except Exception:
                 self._popen.kill()
+        if self._tray_model is not None:
+            self._tray_model.unregister_plugin(self.plugin_name)

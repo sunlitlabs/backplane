@@ -22,28 +22,46 @@ install/security behavior as neutral engineering requirements only.
 
 ## Status
 
-**Backplane's core build (Part 1 of the approved plan) is complete** —
-all 10 phases (0 through 9), 118 tests, all real (real Win32 hotkeys/
-Credential Manager/junctions/mutexes/registry, real subprocess IPC, real
-PowerShell verified via the tool, not mocked). Phase-by-phase detail is in
-git history (`git log --oneline`, tags `v0.1.0`..`v1.0.0`) rather than
-duplicated here.
+**Backplane's core build (Part 1 of the approved plan) is complete, and a
+follow-up hardening/integration pass has closed every gap a post-build
+audit surfaced** — every mechanism built during the 10 phases is now
+actually assembled into one running `HostProcess`, not just independently
+tested. 130 tests, all real (real Win32 hotkeys/Credential Manager/
+junctions/mutexes/registry, real subprocess IPC, real PowerShell verified
+via the tool, not mocked).
 
-What exists end-to-end: a host process that manages plugin subprocesses
-over named-pipe IPC; hotkeys (raw `RegisterHotKey`, in-process + OS-level
-conflict detection, a live-capture Tk widget); centralized settings
-(schema-driven UI, conditional sections) and secrets (Credential Manager);
-a tray model where solo-vs-combined is just a display setting; a plugin
-registry with bounded-retry drift detection and one canonical uninstall
-routine; an updater (GitHub Releases + SemVer, versioned-folder +
-junction installs, rollback, pruning); a smart-launcher chain (fixed
-control pipe, idempotent bootstrap-or-launch, PowerShell prerequisite
-bootstrap) that's simultaneously a plugin's installer and its permanent
-run icon; and a crash/restart supervisor that preserves a plugin's
-hotkey/tray registrations across a crash without ever re-registering them
-from scratch (verified by test, including the case that would silently
-break: the callback closing over a live attribute, not a frozen
-connection).
+What exists end-to-end, as one assembled host: `HostProcess` loads the
+plugin registry at startup and spawns a `PluginSupervisor` per registered
+plugin; runs the control server for real (a fixed pipe a smart-launcher
+stub can reach); wires each plugin's tray presence, an auto-added
+"Settings..." item for any plugin with a schema, and the host's own
+About/Check-for-Updates items; runs periodic drift-checks (with a real
+confirm-removal dialog) and a daily self-update check on Tk `after()`
+scheduling; and renders toast notifications via a queued `ToastManager`.
+The plugin contract now has both `register_hotkey`/`on_hotkey` and
+`add_tray_item`/`on_tray_item` wired end-to-end over IPC, with a callback
+pattern (`self.ipc.send(...)` looked up live at dispatch time, not frozen)
+that keeps registrations working across a plugin crash/restart with no
+re-registration step.
+
+Two real bugs were caught specifically by testing the *assembled* system
+rather than its pieces in isolation, and are worth knowing about if this
+code is touched again: (1) `ControlServer` used to create a fresh
+`Listener` per connection, which left a real gap where the pipe didn't
+exist between closing the old one and binding the new one — fixed to bind
+once and `accept()` repeatedly. (2) `HostProcess.__init__` used to start
+the control server *before* loading registered plugins, so a caller could
+see "host is alive" while `self._supervisors` was still empty — fixed by
+loading plugins first. Testing this also required consolidating every
+Tk-using test file onto one session-scoped root (see `tests/conftest.py`)
+instead of each file's own — running the *whole* suite together crossed
+the same Tcl multi-interpreter fragility that module-scoping had already
+fixed at the single-file level.
+
+**Not yet done** (tracked, not urgent): Start Menu shortcut + startup
+registration aren't wired into install/uninstall yet, and no real GitHub
+Release has been cut for `sunlitlabs/backplane` yet (so `bootstrap_
+backplane()` is untested against the live repo, only against fakes).
 
 **Next**: Part 2 of the plan — migrate py-sensor, then CrierTTS, then
 L10 Manager onto this, in that order (see the plan file referenced in

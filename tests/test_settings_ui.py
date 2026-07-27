@@ -25,17 +25,15 @@ SCHEMA = {
 }
 
 
-@pytest.fixture(scope="module")
-def root():
-    # Module-scoped rather than per-test: repeatedly creating and
-    # destroying a Tk() root within one process is fragile (observed real
-    # Tcl library-path errors on later tests after earlier ones tore their
-    # root down). Each test still gets a fresh Toplevel via SettingsWindow
-    # and destroys only that.
-    r = tk.Tk()
-    r.withdraw()
-    yield r
-    r.destroy()
+@pytest.fixture
+def root(tk_root):
+    # Shared session-scoped Tk() (see conftest.py) rather than a fresh one
+    # per file: repeatedly creating and destroying Tk() within one process
+    # is fragile (observed real Tcl-library-path errors once the full
+    # suite -- many Tk-using test files -- ran together, not just within
+    # this file alone). Each test still gets its own fresh Toplevel via
+    # SettingsWindow and destroys only that.
+    return tk_root
 
 
 def test_conditional_field_hidden_by_default(root):

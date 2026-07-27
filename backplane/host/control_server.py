@@ -52,29 +52,42 @@ class ControlServer:
             self._thread.join(timeout=5)
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                listener = Listener(self._address, family="AF_PIPE")
-            except Exception:
-                logger.exception("Control server failed to bind %s", self._address)
-                return
-            try:
-                conn = listener.accept()
-            except Exception:
-                continue
-            finally:
-                listener.close()
+        # One Listener for the server's whole lifetime, accept()'d
+        # repeatedly -- not a fresh Listener per connection. Recreating it
+        # per connection leaves a real gap between closing the old one and
+        # binding the new one (confirmed empirically: a Client connect
+        # attempt during that window fails with FileNotFoundError, not
+        # queued) -- a client's ping/request landing in that gap looks
+        # exactly like "no host running" with no way to tell the
+        # difference, which is what made this flaky under rapid
+        # sequential connections rather than reliably broken.
+        try:
+            listener = Listener(self._address, family="AF_PIPE")
+        except Exception:
+            logger.exception("Control server failed to bind %s", self._address)
+            return
 
-            if self._stop.is_set():
-                conn.close()
-                break
+        try:
+            while not self._stop.is_set():
+                try:
+                    conn = listener.accept()
+                except Exception:
+                    if self._stop.is_set():
+                        break
+                    continue
 
-            try:
-                self._handle_connection(conn)
-            except Exception:
-                logger.exception("Error handling control connection")
-            finally:
-                conn.close()
+                if self._stop.is_set():
+                    conn.close()
+                    break
+
+                try:
+                    self._handle_connection(conn)
+                except Exception:
+                    logger.exception("Error handling control connection")
+                finally:
+                    conn.close()
+        finally:
+            listener.close()
 
     def _handle_connection(self, conn) -> None:
         try:

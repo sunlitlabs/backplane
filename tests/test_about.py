@@ -13,12 +13,9 @@ from backplane.host.chrome import about as about_module
 from backplane.host.chrome.about import AboutWindow
 
 
-@pytest.fixture(scope="module")
-def root():
-    r = tk.Tk()
-    r.withdraw()
-    yield r
-    r.destroy()
+@pytest.fixture
+def root(tk_root):
+    return tk_root
 
 
 def test_about_window_shows_name_and_version(root):

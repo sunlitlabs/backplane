@@ -4,7 +4,7 @@ plugin.json manifest describing it (see plugin_manifest.py).
 
 from __future__ import annotations
 
-from typing import Any, List, Tuple
+from typing import Any
 
 
 class PluginBase:
@@ -22,9 +22,12 @@ class PluginBase:
     def on_hotkey(self, hotkey_id: str) -> None:
         """Called when a hotkey this plugin registered fires."""
 
-    def get_menu_items(self) -> List[Tuple[str, Any]]:
-        """Return (label, callback) pairs for this plugin's tray menu items."""
-        return []
+    def on_tray_item(self, item_id: str) -> None:
+        """Called when a tray menu item this plugin added (via
+        host.add_tray_item(item_id, label)) is clicked. There is no
+        declarative get_menu_items() -- a callback can't cross the IPC
+        boundary, so items are registered imperatively (typically in
+        on_load), the same pattern as register_hotkey/on_hotkey."""
 
     def start(self) -> None:
         """Called after on_load(); do the plugin's actual work here."""

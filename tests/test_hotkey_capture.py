@@ -14,12 +14,9 @@ from backplane.host.chrome.hotkey_capture import HotkeyCaptureEntry, check_confl
 from backplane.host.hotkeys import HotkeyManager
 
 
-@pytest.fixture(scope="module")
-def root():
-    r = tk.Tk()
-    r.withdraw()
-    yield r
-    r.destroy()
+@pytest.fixture
+def root(tk_root):
+    return tk_root
 
 
 def _press(widget, keysym):
