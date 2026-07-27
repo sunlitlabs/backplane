@@ -69,10 +69,21 @@ host -- it just controls whether `HostProcess` auto-starts that plugin's
 supervisor when the host comes up (already wired in the integration pass
 above), not a separate per-plugin registry key.
 
-**Not yet done** (tracked, not urgent): no real GitHub Release has been
-cut for `sunlitlabs/backplane` yet, so `bootstrap_backplane()`/the
-smart-launcher's truly-fresh-machine path are untested against the live
-repo, only against fakes.
+**A real release now exists.** `sunlitlabs/backplane` v1.2.0 is tagged and
+published on GitHub, with `manifest.json` uploaded as a release asset (via
+`installer/generate_manifest.py`, then never committed -- it's gitignored,
+regenerate it fresh before cutting each release). Verified against the
+*live* repo, unauthenticated, exactly as a fresh machine would: `fetch_
+latest_release`/`fetch_manifest`/`fetch_release_files` all resolve
+correctly and the downloaded file content matches the working tree.
+
+That verification surfaced one real gap: the repo was private, which
+silently breaks the credential-free bootstrap path (`releases/latest`
+404s with no credentials). The repo is now public -- this is required for
+the smart-launcher's zero-touch install to work at all, since a
+fresh machine has nothing to authenticate with. `private/cautions.md`
+stays gitignored regardless; publicness is about the code, not about
+exposing anything environment- or employer-specific.
 
 **Next**: Part 2 of the plan — migrate py-sensor, then CrierTTS, then
 L10 Manager onto this, in that order (see the plan file referenced in
